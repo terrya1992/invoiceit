@@ -963,6 +963,105 @@
 
   /* ---------------------------------------------------------------------- */
 
+  /* ----- Internal linking + extra structured data -------------------------- */
+
+  var BASE = 'https://www.invoiceit.io';
+
+  // Ordered category lists drive the "related" cross-links (even distribution).
+  var CATS = {
+    country: ['uk-invoice-generator','us-invoice-generator','canada-invoice-generator','india-invoice-generator','australia-invoice-generator','new-zealand-invoice-generator','ireland-invoice-generator','south-africa-invoice-generator','singapore-invoice-generator','uae-invoice-generator','germany-invoice-generator','france-invoice-generator','netherlands-invoice-generator'],
+    profession: ['plumber-invoice-generator','electrician-invoice-generator','builder-invoice-generator','carpenter-invoice-generator','painter-decorator-invoice-generator','cleaner-invoice-generator','gardener-invoice-generator','handyman-invoice-generator','mechanic-invoice-generator','photographer-invoice-generator','graphic-designer-invoice-generator','consultant-invoice-generator','freelancer-invoice-generator','personal-trainer-invoice-generator','dj-invoice-generator','music-producer-invoice-generator','web-designer-invoice-generator','web-developer-invoice-generator','copywriter-invoice-generator','virtual-assistant-invoice-generator','tutor-invoice-generator'],
+    template: ['invoice-template','freelance-invoice-template','contractor-invoice-template','vat-invoice-template','blank-invoice-template','pdf-invoice-template','word-invoice-template','excel-invoice-template']
+  };
+
+  // Construction trades -> also link the contractor (CIS) page; freelance-type
+  // roles -> also link the freelance page. Countries -> the VAT page.
+  var CONSTRUCTION = ['plumber-invoice-generator','electrician-invoice-generator','builder-invoice-generator','carpenter-invoice-generator','painter-decorator-invoice-generator','handyman-invoice-generator'];
+  var FREELANCE_ROLES = ['graphic-designer-invoice-generator','consultant-invoice-generator','freelancer-invoice-generator','copywriter-invoice-generator','web-designer-invoice-generator','web-developer-invoice-generator','virtual-assistant-invoice-generator','photographer-invoice-generator'];
+
+  var ACRONYMS = { uk:'UK', us:'US', uae:'UAE', dj:'DJ', vat:'VAT', pdf:'PDF' };
+  function labelFor(slug) {
+    return slug.split('-').map(function (w) {
+      return ACRONYMS[w] || (w.charAt(0).toUpperCase() + w.slice(1));
+    }).join(' ');
+  }
+
+  function categoryOf(slug) {
+    for (var k in CATS) { if (CATS[k].indexOf(slug) !== -1) return k; }
+    return null;
+  }
+
+  function relatedSlugs(slug) {
+    var cat = categoryOf(slug);
+    if (!cat) return [];
+    var list = CATS[cat];
+    var i = list.indexOf(slug);
+    var take = cat === 'template' ? 5 : 6;
+    var out = [];
+    for (var n = 1; n <= take; n++) out.push(list[(i + n) % list.length]);
+    // Topical cross-links to the strong original pages.
+    if (CONSTRUCTION.indexOf(slug) !== -1) out.push('contractor-invoice-generator');
+    else if (FREELANCE_ROLES.indexOf(slug) !== -1) out.push('freelance-invoice-generator');
+    else if (cat === 'country') out.push('vat-invoice-generator');
+    return out;
+  }
+
+  function renderRelated(section, slug) {
+    var rel = relatedSlugs(slug);
+    if (!rel.length) return;
+    var wrap = el('div');
+    wrap.className = 'invoiceit-seo-related';
+    wrap.appendChild(el('h2', 'Related invoice generators'));
+    var ul = el('ul');
+    rel.forEach(function (s) {
+      var li = el('li');
+      var a = el('a', labelFor(s));
+      a.href = '/' + s;
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+    // Always route back to the main free generator.
+    var liMain = el('li');
+    var aMain = el('a', 'Free invoice generator');
+    aMain.href = '/free-invoice-generator';
+    liMain.appendChild(aMain);
+    ul.appendChild(liMain);
+    wrap.appendChild(ul);
+    section.appendChild(wrap);
+  }
+
+  function jsonLd(id, data) {
+    if (document.getElementById(id)) return;
+    var s = el('script');
+    s.type = 'application/ld+json';
+    s.id = id;
+    s.appendChild(document.createTextNode(JSON.stringify(data)));
+    document.head.appendChild(s);
+  }
+
+  function emitSchema(slug, content) {
+    var here = location.origin + location.pathname;
+    jsonLd('invoiceit-webapp-schema', {
+      '@context': 'https://schema.org',
+      '@type': 'WebApplication',
+      name: 'InvoiceIt',
+      url: here,
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'GBP' },
+      description: (content.intro || '').slice(0, 300)
+    });
+    jsonLd('invoiceit-breadcrumb-schema', {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: BASE + '/' },
+        { '@type': 'ListItem', position: 2, name: 'Free invoice generator', item: BASE + '/free-invoice-generator' },
+        { '@type': 'ListItem', position: 3, name: labelFor(slug), item: here }
+      ]
+    });
+  }
+
   function slugFromPath() {
     var path = (location.pathname || '').replace(/\/+$/, '');
     var last = path.split('/').pop() || '';
@@ -987,6 +1086,11 @@
       '.invoiceit-seo li{margin:0 0 7px;font-size:16px}' +
       '.invoiceit-seo .invoiceit-seo-faq{border-top:1px solid #e7eaf0;padding-top:16px;margin-top:10px}' +
       '.invoiceit-seo .invoiceit-seo-faq h3{margin-top:16px}' +
+      '.invoiceit-seo a{color:#2563eb;text-decoration:none}' +
+      '.invoiceit-seo a:hover{text-decoration:underline}' +
+      '.invoiceit-seo .invoiceit-seo-related{border-top:1px solid #e7eaf0;padding-top:16px;margin-top:28px}' +
+      '.invoiceit-seo .invoiceit-seo-related ul{list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:8px 14px}' +
+      '.invoiceit-seo .invoiceit-seo-related li{margin:0}' +
       '@media(max-width:767px){.invoiceit-seo{margin-top:36px;padding:0 18px}.invoiceit-seo h2{font-size:22px}}';
     var style = el('style');
     style.id = 'invoiceit-seo-styles';
@@ -1060,6 +1164,9 @@
       section.appendChild(faqWrap);
       buildFaqJsonLd(content.h1, content.faqs);
     }
+
+    renderRelated(section, slugFromPath());
+    emitSchema(slugFromPath(), content);
 
     var point = insertionPoint();
     if (point && point.tagName === 'FOOTER' && point.parentNode) {
